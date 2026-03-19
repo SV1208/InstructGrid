@@ -1,0 +1,22 @@
+# experiments/configs/v3_crossattn.yaml
+# ---------------------------------------
+# Stage 2: Cross-attention fusion + all Stage 1 improvements
+
+data_path:    language_demo_data.jsonl
+vocab_path:   utils/vocab.json
+model_out:    logs/v3_best.pth
+log_dir:      logs
+
+epochs:       60
+lr:           0.0002
+batch_size:   64
+embed_dim:    64
+hidden_dim:   128
+cnn_channels: 64
+num_heads:    4
+dropout:      0.2
+max_len:      20
+
+augment:      true
+val_frac:     0.1
+seed:         42
