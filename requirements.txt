@@ -10,6 +10,4 @@ pygame==2.6.1
 setuptools==70.2.0
 sympy==1.14.0
 torch==2.10.0+cu126
-torchaudio==2.10.0+cu126
-torchvision==0.25.0+cu126
 typing_extensions==4.15.0

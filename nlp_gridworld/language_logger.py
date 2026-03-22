@@ -121,6 +121,91 @@ def prompt_instruction_in_window(screen, clock, font, small):
         pygame.display.flip()
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Instruction-aware success detection
+# ─────────────────────────────────────────────────────────────────────
+
+def _box_on_target(state: dict, box_colour: str, tgt_colour: str) -> bool:
+    """Check if a specific box is sitting on a specific target zone."""
+    box_key = "red_box_pos"  if box_colour == "red"  else "blue_box_pos"
+    tgt_key = "red_tgt_pos"  if tgt_colour == "red"  else "blue_tgt_pos"
+    return list(state[box_key]) == list(state[tgt_key])
+
+
+def instruction_goal_met(instruction: str, info: dict,
+                         state: dict = None) -> bool:
+    """
+    Returns True when the instruction's specific goal has been satisfied.
+
+    Handles all 6 instruction types including cross-placement cases:
+      red_to_red    "place the red box in the red zone"
+      blue_to_blue  "place the blue box in the blue zone"
+      red_to_blue   "place the red box in the blue zone"
+      blue_to_red   "place the blue box in the red zone"
+      both_correct  "place both boxes in their zones"
+      both_swapped  "place red box in blue zone and blue box in red zone"
+
+    For cross-placement cases (red→blue, blue→red) info["red_done"] is
+    NOT enough — we need to check actual positions from the state dict.
+    Falls back gracefully when state is not provided.
+    """
+    instr = instruction.lower()
+
+    # ── Detect "both swapped" first (most specific pattern) ──────────
+    # Indicator: instruction mentions both colours AND ("swap", "opposite",
+    # "switch", or "blue zone" appears before/after "red zone" suggesting
+    # cross-placement, or both red-to-blue and blue-to-red phrases present)
+    both_swapped = (
+        "swap" in instr
+        or "opposite" in instr
+        or "switch" in instr
+        or ("red" in instr and "blue zone" in instr
+            and "blue" in instr and "red zone" in instr)
+    )
+    if both_swapped:
+        if state:
+            return (_box_on_target(state, "red",  "blue")
+                    and _box_on_target(state, "blue", "red"))
+        # Fallback without state: both boxes must have moved (no env signal)
+        return bool(info.get("red_done")) and bool(info.get("blue_done"))
+
+    # ── Detect "both correct" ─────────────────────────────────────────
+    has_both = "both" in instr or "every" in instr or "each" in instr
+    if has_both:
+        return bool(info.get("red_done")) and bool(info.get("blue_done"))
+
+    # ── Single-box cross-placement: "red box in the blue zone" ────────
+    # Key signal: the box colour and zone colour are DIFFERENT
+    red_box_mentioned  = "red box"   in instr or "red block" in instr
+    blue_box_mentioned = "blue box"  in instr or "blue block" in instr
+    red_zone_mentioned  = "red zone"  in instr or "red target" in instr or "red area" in instr
+    blue_zone_mentioned = "blue zone" in instr or "blue target" in instr or "blue area" in instr
+
+    if red_box_mentioned and blue_zone_mentioned and not red_zone_mentioned:
+        # red box → blue zone
+        if state:
+            return _box_on_target(state, "red", "blue")
+        return bool(info.get("blue_done"))   # imperfect but only fallback
+
+    if blue_box_mentioned and red_zone_mentioned and not blue_zone_mentioned:
+        # blue box → red zone
+        if state:
+            return _box_on_target(state, "blue", "red")
+        return bool(info.get("red_done"))
+
+    # ── Standard single-box cases ─────────────────────────────────────
+    has_red  = "red"  in instr
+    has_blue = "blue" in instr
+
+    if has_red and not has_blue:
+        return bool(info.get("red_done"))
+    if has_blue and not has_red:
+        return bool(info.get("blue_done"))
+
+    # Both colours mentioned without clear cross-placement → require both
+    return bool(info.get("red_done")) and bool(info.get("blue_done"))
+
+
 def run_demo_session():
     pygame.init()
     screen = pygame.display.set_mode((W_WIN, H_WIN))
@@ -191,7 +276,7 @@ def run_demo_session():
             renderer.draw(state, instruction, info)
 
             if action is not None:
-                next_state, _reward, done, info = env.step(action)
+                next_state, _reward, env_done, info = env.step(action)
                 ep_buf.append({
                     "instruction": instruction if len(ep_buf) == 0 else "",
                     "state":       _ser(state),
@@ -200,15 +285,25 @@ def run_demo_session():
                 })
                 state = next_state
 
-                if done:
-                    if info.get("red_done") and info.get("blue_done"):
-                        n = sum(1 for d in demos if d["instruction"]) + 1
-                        print(f"[logger] SUCCESS — episode {n} saved "
-                              f"({len(ep_buf)} steps)")
-                        demos.extend(ep_buf)
-                    else:
-                        print("[logger] Time limit reached — episode discarded.")
+                # Check instruction-specific success BEFORE env_done.
+                # Pass next_state so cross-placement cases can check
+                # actual box positions (info alone is not enough for those).
+                goal_met = instruction_goal_met(instruction, info, next_state)
+
+                if goal_met:
+                    n = sum(1 for d in demos if d["instruction"]) + 1
+                    print(f"[logger] SUCCESS — episode {n} saved "
+                          f"({len(ep_buf)} steps)  "
+                          f"[red={info.get('red_done')} blue={info.get('blue_done')}]")
+                    demos.extend(ep_buf)
                     ep_buf = []
+                    done   = True   # exit the episode loop
+
+                elif env_done:
+                    # Env timed out without reaching the goal
+                    print("[logger] Time limit reached — episode discarded.")
+                    ep_buf = []
+                    done   = True
 
             clock.tick(30)
 
