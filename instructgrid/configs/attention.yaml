@@ -1,0 +1,20 @@
+# configs/attention.yaml
+embed_dim:    64
+hidden_dim:   256
+cnn_channels: 64
+num_heads:    4
+dropout:      0.2
+
+epochs:       110
+lr:           2.0e-4
+batch_size:   64
+max_len:      20
+augment:      true
+val_frac:     0.15
+seed:         42
+
+move_weight:   1.0
+pick_weight:   6.0
+place_weight:  8.0
+label_smoothing: 0.1
+lambda_colour: 0.3

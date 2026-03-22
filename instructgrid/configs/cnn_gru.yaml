@@ -1,0 +1,20 @@
+# configs/cnn_gru.yaml
+embed_dim:   64
+hidden_dim:  256
+dropout:     0.2
+
+epochs:      100
+lr:          3.0e-4
+batch_size:  64
+max_len:     20
+augment:     true
+val_frac:    0.15
+seed:        42
+
+move_weight:   1.0
+pick_weight:   6.0
+place_weight:  8.0
+label_smoothing: 0.1
+
+# Weight for auxiliary colour-prediction loss
+lambda_colour: 0.3
