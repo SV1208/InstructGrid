@@ -24,11 +24,8 @@ from models              import build_model, ALL_MODEL_NAMES
 from models.components   import derive_colour_labels
 from generate_demo_data  import INSTRUCTION_CATALOGUE
 
-try:
-    from torch.utils.tensorboard import SummaryWriter
-    TB = True
-except ImportError:
-    TB = False
+from torch.utils.tensorboard import SummaryWriter
+
 
 HUMAN_DATA  = "language_demo_data_human.jsonl"
 ORACLE_DATA = "language_demo_data_oracle.jsonl"
@@ -129,6 +126,7 @@ def main():
     torch.manual_seed(cfg["seed"])
     os.makedirs(LOG_DIR, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device:", device)
 
     print(f"\n{'='*60}")
     print(f"Training: {args.model.upper()}  |  device={device}")
@@ -178,8 +176,8 @@ def main():
 
     run_name = f"{args.model}_{time.strftime('%m%d_%H%M')}"
     writer   = None
-    if TB:
-        writer = SummaryWriter(log_dir=os.path.join(LOG_DIR, run_name))
+    
+    writer = SummaryWriter(log_dir=os.path.join(LOG_DIR, run_name))
 
     best_val_loss = float("inf")
     out_path      = os.path.join(LOG_DIR, f"{args.model}_best.pth")
